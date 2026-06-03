@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-cream">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ae Label - 3D Interactive WebGL</title>
+    
+    <!-- Load Tailwind CSS for rapid UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Load Google Fonts: Syne for bold headlines, Inter for UI text -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        /* CSS Variables for seamless theme transitions */
+        :root {
+            --color-primary: #1A1A1A;
+            --color-bg: #FDFBF7;
+            --color-border: rgba(26, 26, 26, 0.1);
+        }
+        
+        .theme-cream {
+            --color-primary: #1A1A1A;
+            --color-bg: #FDFBF7;
+            --color-border: rgba(26, 26, 26, 0.1);
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Prevent scrolling */
+            background-color: var(--color-bg);
+            color: var(--color-primary);
+            cursor: none; /* Hide default cursor for custom cursor */
+            transition: background-color 0.8s cubic-bezier(0.25, 1, 0.5, 1), color 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        /* Typography setup */
+        .font-syne { font-family: 'Syne', sans-serif; }
+        .font-inter { font-family: 'Inter', sans-serif; }
+
+        /* Custom Cursor Styling */
+        #custom-cursor {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 32px;
+            height: 32px;
+            border: 2px solid var(--color-primary);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none; /* Let clicks pass through */
+            z-index: 99999;
+            transition: width 0.1s, height 0.1s, background-color 0.1s, border-color 0.5s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Inner dot for cursor */
+        #custom-cursor::after {
+            content: '';
+            width: 4px;
+            height: 4px;
+            background-color: var(--color-primary);
+            border-radius: 50%;
+            transition: background-color 0.5s;
+        }
+
+        /* Cursor interaction states */
+        body.hovering #custom-cursor {
+            width: 48px;
+            height: 48px;
+            background-color: rgba(26, 26, 26, 0.05);
+        }
+        
+        body.clicking #custom-cursor {
+            width: 20px;
+            height: 20px;
+            border-width: 4px;
+        }
+
+        /* Hide custom cursor on touch devices */
+        @media (pointer: coarse) {
+            body { cursor: auto; }
+            #custom-cursor { display: none; }
+        }
+
+        /* 3D Canvas wrapper */
+        #webgl-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        /* UI Overlay to sit on top of the 3D canvas */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none; /* Let clicks pass through to 3D canvas */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* Make specific UI elements clickable */
+        .clickable-ui {
+            pointer-events: auto;
+            cursor: none; /* Keep custom cursor logic */
+        }
+        
+        @media (pointer: coarse) {
+            .clickable-ui { cursor: pointer; }
+        }
+
+        /* Text floating animation */
+        .float-text {
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+            100% { transform: translateY(0px); }
+        }
+    </style>
+</head>
+<body class="text-[var(--color-primary)]">
+
+    <!-- Preloader (Premium Animated Preloader) -->
+    <div id="loader-screen" class="fixed inset-0 bg-[#FDFBF7] z-[100000] flex flex-col justify-center items-center pointer-events-auto">
+        <div class="relative z-10 flex flex-col items-center">
+            <div class="relative font-syne font-extrabold text-7xl tracking-tighter text-[#1A1A1A] flex items-center justify-center select-none h-24">
+                <span id="loader-a" class="inline-block transform opacity-0">a</span>
+                <span id="loader-e" class="inline-block transform opacity-0">e</span>
+                <span id="loader-dot" class="inline-block text-[#FF3366] transform scale-0">.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Cursor Element -->
+    <div id="custom-cursor"></div>
+
+    <!-- WebGL Canvas Container -->
+    <div id="webgl-container"></div>
+
+    <!-- UI Overlay Structure -->
+    <div id="ui-layer" class="p-6 md:p-12">
+        
+        <!-- Header -->
+        <header class="flex justify-between items-center w-full">
+            <div class="clickable-ui font-syne font-bold text-3xl tracking-tighter hover:scale-105 transition-transform">
+                ae.
+            </div>
+            <nav class="clickable-ui font-inter text-sm font-medium flex items-center gap-6">
+                <a href="#" class="hover:opacity-60 transition-opacity hidden sm:inline-block">ARTISTS</a>
+                <a href="#" class="hover:opacity-60 transition-opacity hidden sm:inline-block">ABOUT</a>
+                <div class="w-px h-5 bg-[var(--color-primary)] opacity-20 hidden sm:inline-block"></div>
+                <button class="font-bold">EN</button>
+            </nav>
+        </header>
+
+        <!-- Main Center Typography -->
+        <main class="flex-1 flex flex-col items-center justify-center text-center w-full">
+            <h1 class="font-syne font-extrabold text-[20vw] md:text-[15vw] leading-[0.85] tracking-tight float-text mix-blend-overlay opacity-90 select-none">
+                ae<br>
+                <span class="text-transparent uppercase" style="-webkit-text-stroke: 2px var(--color-primary);">Label</span>
+            </h1>
+        </main>
+
+        <!-- Footer -->
+        <footer class="flex justify-between items-end w-full">
+            <div class="font-inter text-xs md:text-sm font-medium max-w-xs transition-opacity duration-300">
+                <p class="opacity-70">ⓒ 2026 ae Label. All rights reserved.</p>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- Include Three.js for 3D rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Include GSAP for smooth animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <script>
+        
+        // --- 1. SETUP THREE.JS SCENE ---
+        const container = document.getElementById('webgl-container');
+        const scene = new THREE.Scene();
+        
+        // Setup original Cream Theme colors
+        scene.background = new THREE.Color('#FDFBF7');
+        scene.fog = new THREE.FogExp2('#FDFBF7', 0.02);
+
+        // --- 2. SETUP CAMERA ---
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.z = 15;
+        camera.position.y = 2;
+
+        // --- 3. SETUP RENDERER ---
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Optimize for high DPI screens
+        renderer.shadowMap.enabled = true; // Enable shadows for realism
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // --- 4. SETUP LIGHTING ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        scene.add(dirLight);
+
+        const rimLight = new THREE.PointLight(0xffffff, 0.5);
+        rimLight.position.set(-10, 10, -10);
+        scene.add(rimLight);
+
+        // --- 5. AUDIO SYNTHESIZER (No external files needed) ---
+        let audioCtx = null;
+
+        function playPopSound() {
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                // Create oscillator and gain nodes
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+
+                // Setup sound sweep
+                const now = audioCtx.currentTime;
+                const startFreq = 150 + Math.random() * 200; // random juicy base pitch
+                const endFreq = 900 + Math.random() * 500;  // rapid pitch rise for "pop"
+                
+                osc.frequency.setValueAtTime(startFreq, now);
+                osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.08);
+
+                // Gain Envelope
+                gainNode.gain.setValueAtTime(0.4, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+
+                osc.type = 'triangle'; // Smooth bubble feel
+                osc.start(now);
+                osc.stop(now + 0.12);
+            } catch (err) {
+                console.warn('Audio play failed: ', err);
+            }
+        }
+
+        // --- 6. BALLOON MATERIALS & GEOMETRY ---
+        const colors = [
+            0xFF3366, // Hot Pink
+            0x33CCFF, // Bright Cyan
+            0xFFCC00, // Yellow
+            0x9933FF, // Purple
+            0x00FF66, // Neon Green
+            0xFF6600  // Orange
+        ];
+
+        // Custom balloon materials using high glossy physical properties
+        const balloonMaterials = colors.map(colorHex => {
+            return new THREE.MeshPhysicalMaterial({
+                color: colorHex,
+                metalness: 0.05,
+                roughness: 0.1,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.05,
+                transmission: 0.25,
+                thickness: 0.4,
+            });
+        });
+
+        const balloonGeo = new THREE.SphereGeometry(1, 32, 32);
+        balloonGeo.scale(1, 1.25, 1); // oval/balloon stretch
+        
+        const knotGeo = new THREE.CylinderGeometry(0.1, 0.2, 0.3, 16);
+
+        // Arrays to manage dynamic balloon objects
+        let balloons = [];
+        let interactableMeshes = [];
+        let maxBalloons = 25;
+        let balloonGlobalScale = 1.0;
+        let balloonGlobalSpeed = 1.0;
+
+        function createBalloon(initial = false) {
+            const group = new THREE.Group();
+            const material = balloonMaterials[Math.floor(Math.random() * balloonMaterials.length)];
+            
+            const body = new THREE.Mesh(balloonGeo, material);
+            body.castShadow = true;
+            body.receiveShadow = true;
+            body.userData.isBalloonBody = true;
+            body.userData.parentGroup = group;
+            group.add(body);
+
+            const knot = new THREE.Mesh(knotGeo, material);
+            knot.position.y = -1.3;
+            knot.castShadow = true;
+            group.add(knot);
+
+            resetBalloonPosition(group, initial);
+
+            group.userData = {
+                speedY: (0.02 + Math.random() * 0.04),
+                wobbleSpeed: 0.01 + Math.random() * 0.02,
+                wobbleAmount: 0.05 + Math.random() * 0.05,
+                timeOffset: Math.random() * Math.PI * 2,
+                colorIndex: material.color,
+                isPopping: false
+            };
+
+            // Scale with global setting
+            group.scale.set(balloonGlobalScale, balloonGlobalScale, balloonGlobalScale);
+
+            scene.add(group);
+            balloons.push(group);
+            interactableMeshes.push(body);
+        }
+
+        function resetBalloonPosition(balloon, initial = false) {
+            const x = (Math.random() - 0.5) * 32;
+            const z = (Math.random() - 0.5) * 20 - 4;
+            const y = initial ? (Math.random() - 0.5) * 24 : -16;
+            
+            balloon.position.set(x, y, z);
+            balloon.scale.set(balloonGlobalScale, balloonGlobalScale, balloonGlobalScale);
+            balloon.visible = true;
+            
+            if(balloon.userData) {
+                balloon.userData.isPopping = false;
+            }
+        }
+
+        // Initialize original balloons
+        for (let i = 0; i < maxBalloons; i++) {
+            createBalloon(true);
+        }
+
+        // --- 7. EXPLOSION PARTICLE SYSTEM ---
+        const particles = [];
+        const particleGeo = new THREE.SphereGeometry(0.1, 8, 8);
+
+        function createExplosion(position, color) {
+            const particleCount = 18;
+            const pMaterial = new THREE.MeshBasicMaterial({ color: color });
+
+            for (let i = 0; i < particleCount; i++) {
+                const particle = new THREE.Mesh(particleGeo, pMaterial);
+                particle.position.copy(position);
+                
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos((Math.random() * 2) - 1);
+                const speed = 0.2 + Math.random() * 0.4;
+
+                particle.userData = {
+                    velocityX: speed * Math.sin(phi) * Math.cos(theta),
+                    velocityY: speed * Math.sin(phi) * Math.sin(theta),
+                    velocityZ: speed * Math.cos(phi),
+                    life: 1.0
+                };
+
+                scene.add(particle);
+                particles.push(particle);
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.position.x += p.userData.velocityX;
+                p.position.y += p.userData.velocityY;
+                p.position.z += p.userData.velocityZ;
+                
+                p.userData.velocityY -= 0.008; // Gravity effect
+                p.userData.life -= 0.025;
+                const scale = Math.max(0, p.userData.life);
+                p.scale.set(scale, scale, scale);
+
+                if (p.userData.life <= 0) {
+                    scene.remove(p);
+                    p.material.dispose();
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // --- 8. MOUSE TRACKING & RAYCAST ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        
+        window.addEventListener('mousemove', (event) => {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            const cursor = document.getElementById('custom-cursor');
+            if (cursor) {
+                cursor.style.left = event.clientX + 'px';
+                cursor.style.top = event.clientY + 'px';
+            }
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(interactableMeshes);
+            if (intersects.length > 0 && !intersects[0].object.userData.parentGroup.userData.isPopping) {
+                document.body.classList.add('hovering');
+            } else {
+                document.body.classList.remove('hovering');
+            }
+        });
+
+        // Trigger popping mechanic
+        function handleInteraction(clientX, clientY) {
+            document.body.classList.add('clicking');
+            setTimeout(() => document.body.classList.remove('clicking'), 150);
+
+            mouse.x = (clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(interactableMeshes);
+
+            if (intersects.length > 0) {
+                const hitObject = intersects[0].object;
+                const balloonGroup = hitObject.userData.parentGroup;
+
+                if (balloonGroup.userData.isPopping) return;
+                balloonGroup.userData.isPopping = true;
+
+                document.body.classList.remove('hovering');
+                playPopSound();
+
+                // Scaling popping animation
+                gsap.to(balloonGroup.scale, {
+                    x: balloonGlobalScale * 1.6,
+                    y: balloonGlobalScale * 1.6,
+                    z: balloonGlobalScale * 1.6,
+                    duration: 0.12,
+                    ease: "power2.in",
+                    onComplete: () => {
+                        balloonGroup.visible = false;
+                        const popPosition = new THREE.Vector3();
+                        balloonGroup.getWorldPosition(popPosition);
+                        
+                        createExplosion(popPosition, hitObject.material.color);
+
+                        setTimeout(() => {
+                            resetBalloonPosition(balloonGroup);
+                        }, 2000);
+                    }
+                });
+            }
+        }
+
+        window.addEventListener('mousedown', (e) => {
+            handleInteraction(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 0) {
+                handleInteraction(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, {passive: true});
+
+        // Resize Canvas and camera
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Camera Parallax based on mouse coordinates
+        let targetCameraX = 0;
+        let targetCameraY = 2;
+        const clock = new THREE.Clock();
+
+        // --- 9. MAIN RENDER LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            const elapsedTime = clock.getElapsedTime();
+
+            // Animate Active Balloons
+            balloons.forEach(balloon => {
+                if (!balloon.userData.isPopping && balloon.visible) {
+                    // Update movement matching speed factor
+                    balloon.position.y += (balloon.userData.speedY * balloonGlobalSpeed);
+                    
+                    // Sideways swing (wobble)
+                    balloon.position.x += Math.sin(elapsedTime * 10 * balloon.userData.wobbleSpeed + balloon.userData.timeOffset) * balloon.userData.wobbleAmount;
+                    balloon.rotation.z = Math.sin(elapsedTime * 5 * balloon.userData.wobbleSpeed + balloon.userData.timeOffset) * 0.1;
+
+                    // Out of bounds reset
+                    if (balloon.position.y > 15) {
+                        resetBalloonPosition(balloon);
+                    }
+                }
+            });
+
+            // Update Particle FX
+            updateParticles();
+
+            // Camera follow mouse ease
+            targetCameraX = mouse.x * 2.5;
+            targetCameraY = 2 + (mouse.y * 1.5);
+            camera.position.x += (targetCameraX - camera.position.x) * 0.05;
+            camera.position.y += (targetCameraY - camera.position.y) * 0.05;
+            camera.lookAt(0, 2, 0);
+
+            renderer.render(scene, camera);
+        }
+
+        // --- 10. INITIAL PRELOADER ENTRANCE ---
+        window.onload = () => {
+            animate(); // starts background graphics rendering
+            
+            // Init loader characters animation
+            gsap.set("#loader-a", { y: 30, opacity: 0, rotate: -20 });
+            gsap.set("#loader-e", { y: 30, opacity: 0, rotate: 20 });
+
+            const loaderTimeline = gsap.timeline({
+                onComplete: () => {
+                    const loader = document.getElementById('loader-screen');
+                    if (loader) loader.style.display = 'none';
+                    
+                    // Entrance for Main UI
+                    gsap.from("#ui-layer header", { y: -50, opacity: 0, duration: 1.2, ease: "power4.out" });
+                    gsap.from("#ui-layer main h1", { scale: 0.8, opacity: 0, duration: 1.8, ease: "elastic.out(1, 0.4)" });
+                    gsap.from("#ui-layer footer", { y: 50, opacity: 0, duration: 1.2, ease: "power4.out" });
+                }
+            });
+
+            // Choreograph loader sequence
+            loaderTimeline
+                .to("#loader-a", { y: 0, opacity: 1, rotate: 0, duration: 0.8, ease: "back.out(1.7)" })
+                .to("#loader-e", { y: 0, opacity: 1, rotate: 0, duration: 0.8, ease: "back.out(1.7)" }, "-=0.6")
+                .to("#loader-dot", { scale: 1, duration: 0.5, ease: "elastic.out(1.5, 0.5)" }, "-=0.3")
+                .to(["#loader-a", "#loader-e"], { 
+                    scaleY: 0.7, scaleX: 1.3, duration: 0.15, yoyo: true, repeat: 1, ease: "power2.inOut" 
+                }, "+=0.3")
+                .to("#loader-screen", {
+                    opacity: 0,
+                    scale: 1.08,
+                    duration: 0.9,
+                    ease: "power4.inOut"
+                });
+        };
+
+    </script>
+</body>
+</html>
